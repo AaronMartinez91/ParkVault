@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Microsoft.Win32;
 
 namespace ParkVault
 {
@@ -26,6 +27,14 @@ namespace ParkVault
             unregister,
             login,
             logout
+        };
+
+        enum BoxOpCode
+        {
+            status,
+            put,
+            obtain,
+            clear
         };
 
 
@@ -69,13 +78,52 @@ namespace ParkVault
         }
 
         // Recibe bytes desde un socket y devuelve el int resultante
-        static int ReceiveInt(Socket socket)
+        private int ReceiveInt(Socket socket)
         {
             byte[] bytes = new byte[sizeof(int)];
             socket.Receive(bytes);
             int numRecibido = BitConverter.ToInt32(bytes);
             
             return numRecibido;
+        }
+
+        // Función que a través de un socket, envía los parámetros necesarios para comprobar el estado de una caja y recobe a su vez la respuesta del servidor, cambiando la interfaz
+        private void StatusRequest()
+        {
+            // Hay que pedir el estado de la caja y cambiar el BoxStatusText.Text en función de la respuesta
+
+            Socket socket = CreateSocketAndConnectServer(boxPort);
+
+            // Primero enviamos el num que determina la orden que va a recibir el servidor
+
+            int code = (int)BoxOpCode.status;
+            SendInt(code, socket);
+
+            // Después el resto de parámetros: Nombre de usuario, Password, fila y columna
+            SendString(UserNameText.Text, socket);
+            SendString(PasswordText.Text, socket);
+            SendInt(selectedBoxRow, socket);
+            SendInt(selectedBoxColumn, socket);
+
+            // Recibimos respuesta del server y la mostramos
+            int response = ReceiveInt(socket);
+
+            if (response == 0)
+            {
+                BoxStatusText.Text = "Empty";
+            }
+            else if (response == 1)
+            {
+                BoxStatusText.Text = "Occupied";
+            }
+            else if (response == -1)
+            {
+                BoxStatusText.Text = "Incorrect password";
+            }
+            else if (response == -2)
+            {
+                BoxStatusText.Text = "User not logged in";
+            }
         }
 
         private void MainWindow_Loaded(object sender,RoutedEventArgs e)
@@ -256,6 +304,11 @@ namespace ParkVault
             ////////////////////////////////////////////
 
             Socket socket = CreateSocketAndConnectServer(boxPort);
+
+            // Primero enviamos el num que determina la orden que va a recibir el servidor
+
+            int code = (int)BoxOpCode.obtain;
+            SendInt(code, socket);
         }
 
         private void PutContentsButton_Click(object sender,RoutedEventArgs e)
@@ -265,6 +318,68 @@ namespace ParkVault
             ////////////////////////////////////////////
 
             Socket socket = CreateSocketAndConnectServer(boxPort);
+
+            // Primero enviamos el num que determina la orden que va a recibir el servidor
+
+            int code = (int)BoxOpCode.put;
+            SendInt(code, socket);
+
+            // Después enviamos user, password, boxRow, boxColumn, boxCode y boxData
+            SendString(UserNameText.Text, socket);
+            SendString(PasswordText.Text, socket);
+            SendInt(selectedBoxRow, socket);
+            SendInt(selectedBoxColumn, socket);
+            SendString(AccessCodeText.Text, socket);
+
+           
+
+            // Abrir diálogo para seleccionar fichero
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            openFileDialog.Title = "Selecciona un archivo";
+            openFileDialog.Filter = "Todos los archivos (*.*)|*.*";
+
+            bool? result = openFileDialog.ShowDialog();
+
+            if (result == true)
+            {
+                // Ruta del fichero seleccionado
+                string filePath = openFileDialog.FileName;
+
+                // Leer todo el archivo en bytes
+                byte[] fileBytes = System.IO.File.ReadAllBytes(filePath);
+
+                // AQUÍ ya tienes los bytes listos para enviar
+                // Por ejemplo:
+                // SendBytes(fileBytes, socket);
+            }
+            else
+            {
+                MessageBox.Show("No se seleccionó ningún archivo");
+                return;
+            }
+
+             hacer sendBytes
+            // SendString(datos que quiero enviar);
+
+            // Recibimos respuesta del server y la mostramos
+            int response = ReceiveInt(socket);
+
+            if (response == 0)
+            {
+                MessageBox.Show("OK");
+            }
+            else if (response == -1)
+            {
+                MessageBox.Show("Password incorrecto");
+            }
+            else if (response == -2)
+            {
+                MessageBox.Show("Usuario no logueado");
+            }
+            else if (response == -3)
+            {
+                MessageBox.Show("Caja ocupada");
+            }
         }
 
         private void ClearContentsButton_Click(object sender,RoutedEventArgs e)
@@ -274,6 +389,11 @@ namespace ParkVault
             ///////////////////////////////////////////////
 
             Socket socket = CreateSocketAndConnectServer(boxPort);
+
+            // Primero enviamos el num que determina la orden que va a recibir el servidor
+
+            int code = (int)BoxOpCode.clear;
+            SendInt(code, socket);
         }
 
         private void ShowWaitPanel()
@@ -295,6 +415,8 @@ namespace ParkVault
             selectedBoxRow = 0;
             selectedBoxColumn = 0;
 
+            StatusRequest();
+
         }
 
         private void Box0BButton_Click(object sender,RoutedEventArgs e)
@@ -303,6 +425,8 @@ namespace ParkVault
 
             selectedBoxRow = 0;
             selectedBoxColumn = 1;
+
+            StatusRequest();
         }
 
         private void Box0CButton_Click(object sender,RoutedEventArgs e)
@@ -311,6 +435,8 @@ namespace ParkVault
 
             selectedBoxRow = 0;
             selectedBoxColumn = 2;
+
+            StatusRequest();
         }
 
         private void Box0DButton_Click(object sender,RoutedEventArgs e)
@@ -319,6 +445,8 @@ namespace ParkVault
 
             selectedBoxRow = 0;
             selectedBoxColumn = 3;
+
+            StatusRequest();
         }
 
         private void Box1AButton_Click(object sender,RoutedEventArgs e)
@@ -327,6 +455,8 @@ namespace ParkVault
 
             selectedBoxRow = 1;
             selectedBoxColumn = 0;
+
+            StatusRequest();
         }
 
         private void Box1BButton_Click(object sender,RoutedEventArgs e)
@@ -335,6 +465,8 @@ namespace ParkVault
 
             selectedBoxRow = 1;
             selectedBoxColumn = 1;
+
+            StatusRequest();
 
         }
 
@@ -345,6 +477,8 @@ namespace ParkVault
             selectedBoxRow = 1;
             selectedBoxColumn = 2;
 
+            StatusRequest();
+
         }
 
         private void Box1DButton_Click(object sender,RoutedEventArgs e)
@@ -353,6 +487,8 @@ namespace ParkVault
 
             selectedBoxRow = 1;
             selectedBoxColumn = 3;
+
+            StatusRequest();
 
         }
 
@@ -363,6 +499,8 @@ namespace ParkVault
             selectedBoxRow = 2;
             selectedBoxColumn = 0;
 
+            StatusRequest();
+
         }
 
         private void Box2BButton_Click(object sender,RoutedEventArgs e)
@@ -372,6 +510,7 @@ namespace ParkVault
             selectedBoxRow = 2;
             selectedBoxColumn = 1;
 
+            StatusRequest();
         }
 
         private void Box2CButton_Click(object sender,RoutedEventArgs e)
@@ -381,6 +520,7 @@ namespace ParkVault
             selectedBoxRow = 2;
             selectedBoxColumn = 2;
 
+            StatusRequest();
         }
 
         private void Box2DButton_Click(object sender,RoutedEventArgs e)
@@ -390,6 +530,7 @@ namespace ParkVault
             selectedBoxRow = 2;
             selectedBoxColumn = 3;
 
+            StatusRequest();
         }
 
         private void Box3AButton_Click(object sender,RoutedEventArgs e)
@@ -399,6 +540,7 @@ namespace ParkVault
             selectedBoxRow = 3;
             selectedBoxColumn = 0;
 
+            StatusRequest();
         }
 
         private void Box3BButton_Click(object sender,RoutedEventArgs e)
@@ -408,6 +550,7 @@ namespace ParkVault
             selectedBoxRow = 3;
             selectedBoxColumn = 1;
 
+            StatusRequest();
         }
 
         private void Box3CButton_Click(object sender,RoutedEventArgs e)
@@ -417,6 +560,7 @@ namespace ParkVault
             selectedBoxRow = 3;
             selectedBoxColumn = 2;
 
+            StatusRequest();
         }
 
         private void Box3DButton_Click(object sender,RoutedEventArgs e)
@@ -426,6 +570,7 @@ namespace ParkVault
             selectedBoxRow = 3;
             selectedBoxColumn = 3;
 
+            StatusRequest();
         }
         
     }
