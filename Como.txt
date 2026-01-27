@@ -1,0 +1,13 @@
+las cjas contienen pw y datos en bytes
+al volver a entrar, otro usuario puede poner la pw, recuperar los datos y entonces se rompe la misma (se vacía y vuelve a quedar libre)
+
+servidor REST, cierra la conexión después de hace rla operación
+
+listas/diccionarios... de registrados y logueados
+
+los datos enviados por servidor BINARIOS!
+
+al pulsar en los botones de 0A 0B... el status debe cambiar al actual
+
+al darle al put, que se abra una ventana (file dialog) que pregunte que fichero quieres leer, los lees y lo abres al servidor
+
