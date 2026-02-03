@@ -76,6 +76,8 @@ namespace ParkVault
             byte[] bytes = BitConverter.GetBytes(i);
             socket.Send(bytes);
         }
+                         
+
 
         // Recibe bytes desde un socket y devuelve el int resultante
         private int ReceiveInt(Socket socket)
@@ -309,6 +311,55 @@ namespace ParkVault
 
             int code = (int)BoxOpCode.obtain;
             SendInt(code, socket);
+
+            // Después enviamos user, password, boxRow, boxColumn, boxCode y boxData
+            SendString(UserNameText.Text, socket);
+            SendString(PasswordText.Text, socket);
+            SendInt(selectedBoxRow, socket);
+            SendInt(selectedBoxColumn, socket);
+            SendString(AccessCodeText.Text, socket);
+
+            // Recibimos respuesta del server y la mostramos
+            int response = ReceiveInt(socket);
+
+            if (response == 0)
+            {
+                MessageBox.Show("OK");
+
+                // Solo cuando sea ok, recibimos el archivo.
+                int contentLenght = ReceiveInt(socket);
+                byte[] content = new byte[contentLenght];
+                socket.Receive(content);
+
+                // Abrir el diálogo para guardar el archivo
+                SaveFileDialog saveFileDialog = new SaveFileDialog();
+                saveFileDialog.Title = "Guardar archivo";
+                saveFileDialog.Filter = "Todos los archivos (*.*)|*.*";
+
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    System.IO.File.WriteAllBytes(saveFileDialog.FileName, content);
+                    MessageBox.Show("Archivo guardado correctamente");
+                }
+            }
+            else if (response == -1)
+            {
+                MessageBox.Show("Password incorrecto");
+            }
+            else if (response == -2)
+            {
+                MessageBox.Show("Usuario no logueado");
+            }
+            else if (response == -3)
+            {
+                MessageBox.Show("Caja ocupada");
+            }
+            else if (response == -4)
+            {
+                MessageBox.Show("Código incorrecto");
+            }
+
+            //file.WriteAllBytes
         }
 
         private void PutContentsButton_Click(object sender,RoutedEventArgs e)
@@ -330,8 +381,7 @@ namespace ParkVault
             SendInt(selectedBoxRow, socket);
             SendInt(selectedBoxColumn, socket);
             SendString(AccessCodeText.Text, socket);
-
-           
+                      
 
             // Abrir diálogo para seleccionar fichero
             OpenFileDialog openFileDialog = new OpenFileDialog();
@@ -348,18 +398,25 @@ namespace ParkVault
                 // Leer todo el archivo en bytes
                 byte[] fileBytes = System.IO.File.ReadAllBytes(filePath);
 
-                // AQUÍ ya tienes los bytes listos para enviar
-                // Por ejemplo:
-                // SendBytes(fileBytes, socket);
+                // para que el servidor sepa si va a recibir o no archivo, enviamos un dato de control (1 para true, 0 para false), usamos int para reutilizar función
+                int archiveSent = 1;
+                SendInt(archiveSent, socket);
+
+                // AQUÍ ya tengo los bytes listos para enviar
+                int fileBytesLenght = fileBytes.Length;
+                SendInt(fileBytesLenght, socket);
+                socket.Send(fileBytes);
             }
             else
             {
                 MessageBox.Show("No se seleccionó ningún archivo");
+                // para que el servidor sepa si va a recibir o no archivo, enviamos un dato de control (1 para true, 0 para false), usamos int para reutilizar función
+                int archiveSent = 0;
+                SendInt(archiveSent, socket);
+
                 return;
             }
-
-             hacer sendBytes
-            // SendString(datos que quiero enviar);
+             
 
             // Recibimos respuesta del server y la mostramos
             int response = ReceiveInt(socket);

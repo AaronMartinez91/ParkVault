@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Reflection.Metadata;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ParkVaultServer
@@ -27,12 +28,12 @@ namespace ParkVaultServer
 
     internal class Program
     {
-        struct Box
+        class Box
         {
             public string id;
             public string accessCode;
             public bool isOccupied;
-            public string content;
+            public byte[] content;
         }
 
         static Dictionary<string, string> registeredUsers = new Dictionary<string, string>();
@@ -233,7 +234,9 @@ namespace ParkVaultServer
             int boxRow;
             int boxColumn;
             string boxCode;
-            string boxData;
+            int dataReceived;
+            byte[] boxData = null;
+            Box auxBox = null;
 
             Socket BoxServiceSocket = (Socket)o;
 
@@ -242,7 +245,7 @@ namespace ParkVaultServer
 
             // en funcion de la orden recibida, recibiremos más o menos datos, por lo que filtramos aquí
 
-            if (order == 0)
+            if (order == 0) // status
             {
                 // Recibimos valores de user, password, boxRow y boxColumn
                 user = ReceiveString(BoxServiceSocket);
@@ -295,7 +298,74 @@ namespace ParkVaultServer
                 boxRow = ReceiveInt(BoxServiceSocket);
                 boxColumn = ReceiveInt(BoxServiceSocket);
                 boxCode = ReceiveString(BoxServiceSocket);
-                boxData = ReceiveString(BoxServiceSocket); //ReceiveBytes y file.WriteAllBytes
+
+                dataReceived = ReceiveInt(BoxServiceSocket);
+                
+                // solo si el cliente envía un 1, recibimos un archivo
+                if (dataReceived == 1)
+                {
+                    int filesLenght = ReceiveInt(BoxServiceSocket);
+                    boxData = new byte[filesLenght];
+
+                    BoxServiceSocket.Receive(boxData); 
+
+                    Console.WriteLine($"Archivo recibido: {boxData}");
+                }                
+
+                // primero comprobamos el login
+                bool isLogged = UserIsLogged(user);
+
+                // guardamos el ID de la caja
+                string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
+
+                if (!isLogged)
+                {
+                    SendInt(-2, BoxServiceSocket);
+                }
+                else
+                {
+                    // comprobamos si la contraseña es correcta
+                    if (registeredUsers[user] != password)
+                    {
+                        SendInt(-1, BoxServiceSocket);
+                    }
+                    else
+                    {
+                        
+                        // ahora debemos mirar si la caja está ocupada o no
+                        foreach (Box b in boxes)
+                        {
+                            // obtenemos la caja con la que vamos a trabajar
+                            if (b.id == boxId)
+                            {
+                                auxBox = b;
+                            }
+                        }
+                        if (auxBox.isOccupied)
+                        {
+                            SendInt(-3, BoxServiceSocket);
+                        }
+                        else
+                        {
+                            auxBox.accessCode = boxCode;
+                            auxBox.isOccupied = true;
+                            auxBox.content = boxData;
+
+                            Thread.Sleep(1000);
+                            SendInt(0, BoxServiceSocket);
+                        }                    
+                    }
+                }
+
+            }
+            else if (order == 2) // get item
+            {
+                // Recibimos valores de user, password, boxRow, boxColumn y boxCode
+                user = ReceiveString(BoxServiceSocket);
+                password = ReceiveString(BoxServiceSocket);
+                boxRow = ReceiveInt(BoxServiceSocket);
+                boxColumn = ReceiveInt(BoxServiceSocket);
+                boxCode = ReceiveString(BoxServiceSocket);
 
                 // primero comprobamos el login
                 bool isLogged = UserIsLogged(user);
@@ -319,36 +389,44 @@ namespace ParkVaultServer
                         // ahora debemos mirar si la caja está ocupada o no
                         foreach (Box b in boxes)
                         {
+                            // obtenemos la caja con la que vamos a trabajar
                             if (b.id == boxId)
                             {
-                                if (b.isOccupied)
-                                {
-                                    SendInt(-3, BoxServiceSocket);
-                                }
-                                else
-                                {
-                                    foreach (Box b2 in boxes)
-                                    {
-                                        if (b2.id == boxId)
-                                        {
-                                            Box box = new Box();
-                                            box.id = b2.id;
-                                            box.accessCode = boxCode;
-                                            box.isOccupied = true;
-                                            box.content = boxData;
-
-                                            boxes.Remove(b2);
-                                            boxes.Add(box);
-                                        }
-                                    }
-                                    Thread.Sleep(1000);
-                                    SendInt(0, BoxServiceSocket);
-                                }
+                                auxBox = b;
                             }
+                        }
+                        if (!auxBox.isOccupied)
+                        {
+                            SendInt(-3, BoxServiceSocket);
+                        }
+                        else
+                        {
+                            // comprobamos si el código es correcto
+                            if (auxBox.accessCode != boxCode)
+                            {
+                                SendInt(-4, BoxServiceSocket);
+                            }
+                            else
+                            {
+                                // enviamos datos y borramos
+                                SendInt(0, BoxServiceSocket);
+
+                                byte[] sendContent = auxBox.content;
+                                int contentLenght = sendContent.Length;
+
+                                SendInt(contentLenght, BoxServiceSocket);
+                                BoxServiceSocket.Send(sendContent);
+
+                                auxBox.accessCode = null;
+                                auxBox.isOccupied = false;
+                                auxBox.content = null;
+
+                                Thread.Sleep(1000);
+                            }
+
                         }
                     }
                 }
-
             }
 
 
@@ -356,7 +434,8 @@ namespace ParkVaultServer
 
 
 
-            BoxServiceSocket.Close();
+
+                BoxServiceSocket.Close();
         }
 
         static string ReceiveString(Socket socket)
@@ -421,9 +500,9 @@ namespace ParkVaultServer
                 {
                     Box box = new Box();
                     box.id = $"{i}{(BoxLetters)j}";
-                    box.accessCode = "0000";
+                    box.accessCode = null;
                     box.isOccupied = false;
-                    box.content = "";
+                    box.content = null;
                     boxes.Add(box);
                 }
             }
