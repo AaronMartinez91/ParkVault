@@ -352,7 +352,7 @@ namespace ParkVault
             }
             else if (response == -3)
             {
-                MessageBox.Show("Caja ocupada");
+                MessageBox.Show("Caja no ocupada");
             }
             else if (response == -4)
             {

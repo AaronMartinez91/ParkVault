@@ -429,12 +429,6 @@ namespace ParkVaultServer
                 }
             }
 
-
-
-
-
-
-
                 BoxServiceSocket.Close();
         }
 
