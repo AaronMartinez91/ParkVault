@@ -359,7 +359,6 @@ namespace ParkVault
                 MessageBox.Show("Código incorrecto");
             }
 
-            //file.WriteAllBytes
         }
 
         private void PutContentsButton_Click(object sender,RoutedEventArgs e)
@@ -375,7 +374,7 @@ namespace ParkVault
             int code = (int)BoxOpCode.put;
             SendInt(code, socket);
 
-            // Después enviamos user, password, boxRow, boxColumn, boxCode y boxData
+            // Después enviamos user, password, boxRow, boxColumn y boxCode
             SendString(UserNameText.Text, socket);
             SendString(PasswordText.Text, socket);
             SendInt(selectedBoxRow, socket);
@@ -451,6 +450,37 @@ namespace ParkVault
 
             int code = (int)BoxOpCode.clear;
             SendInt(code, socket);
+
+            // Después enviamos user, password, boxRow, boxColumn y boxCode
+            SendString(UserNameText.Text, socket);
+            SendString(PasswordText.Text, socket);
+            SendInt(selectedBoxRow, socket);
+            SendInt(selectedBoxColumn, socket);
+            SendString(AccessCodeText.Text, socket);
+
+            // Recibimos respuesta del server y la mostramos
+            int response = ReceiveInt(socket);
+
+            if (response == 0)
+            {
+                MessageBox.Show("OK");                
+            }
+            else if (response == -1)
+            {
+                MessageBox.Show("Password incorrecto");
+            }
+            else if (response == -2)
+            {
+                MessageBox.Show("Usuario no logueado");
+            }
+            else if (response == -3)
+            {
+                MessageBox.Show("Caja no ocupada");
+            }
+            else if (response == -4)
+            {
+                MessageBox.Show("Código incorrecto");
+            }
         }
 
         private void ShowWaitPanel()

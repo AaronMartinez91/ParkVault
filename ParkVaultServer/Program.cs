@@ -428,6 +428,70 @@ namespace ParkVaultServer
                     }
                 }
             }
+            else if (order == 3) // get item
+            {
+                // Recibimos valores de user, password, boxRow, boxColumn y boxCode
+                user = ReceiveString(BoxServiceSocket);
+                password = ReceiveString(BoxServiceSocket);
+                boxRow = ReceiveInt(BoxServiceSocket);
+                boxColumn = ReceiveInt(BoxServiceSocket);
+                boxCode = ReceiveString(BoxServiceSocket);
+
+                // primero comprobamos el login
+                bool isLogged = UserIsLogged(user);
+
+                // guardamos el ID de la caja
+                string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
+
+                if (!isLogged)
+                {
+                    SendInt(-2, BoxServiceSocket);
+                }
+                else
+                {
+                    // comprobamos si la contraseña es correcta
+                    if (registeredUsers[user] != password)
+                    {
+                        SendInt(-1, BoxServiceSocket);
+                    }
+                    else
+                    {
+                        // ahora debemos mirar si la caja está ocupada o no
+                        foreach (Box b in boxes)
+                        {
+                            // obtenemos la caja con la que vamos a trabajar
+                            if (b.id == boxId)
+                            {
+                                auxBox = b;
+                            }
+                        }
+                        if (!auxBox.isOccupied)
+                        {
+                            SendInt(-3, BoxServiceSocket);
+                        }
+                        else
+                        {
+                            // comprobamos si el código es correcto
+                            if (auxBox.accessCode != boxCode)
+                            {
+                                SendInt(-4, BoxServiceSocket);
+                            }
+                            else
+                            {
+                                // borramos datos
+                                                 
+                                auxBox.accessCode = null;
+                                auxBox.isOccupied = false;
+                                auxBox.content = null;
+
+                                Thread.Sleep(1000);
+                                SendInt(0, BoxServiceSocket);
+                            }
+
+                        }
+                    }
+                }
+            }
 
                 BoxServiceSocket.Close();
         }
