@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Reflection.Metadata;
 using System.Security.Cryptography;
@@ -33,7 +34,7 @@ namespace ParkVaultServer
             public string id;
             public string accessCode;
             public bool isOccupied;
-            public byte[] content;
+            //public byte[] content;
         }
 
         static Dictionary<string, string> registeredUsers = new Dictionary<string, string>();
@@ -284,6 +285,9 @@ namespace ParkVaultServer
                                 else
                                 {
                                     SendInt(0, BoxServiceSocket);
+
+                                    // Hemos decidido guardar solo el caso en el que se muestra info de las cajas al usuario
+                                    WriteLog($"El usuario {user} ha comprobado la caja {boxId}");
                                 }
                             }
                         }
@@ -347,9 +351,13 @@ namespace ParkVaultServer
                         }
                         else
                         {
+
                             auxBox.accessCode = boxCode;
                             auxBox.isOccupied = true;
-                            auxBox.content = boxData;
+                            //auxBox.content = boxData;  ya no nos hace falta, esto ahora lo gestiona el archivo
+
+                            SaveBoxConfig(auxBox);
+                            SaveBoxContent(auxBox.id, boxData);
 
                             Thread.Sleep(1000);
                             SendInt(0, BoxServiceSocket);
@@ -411,7 +419,8 @@ namespace ParkVaultServer
                                 // enviamos datos y borramos
                                 SendInt(0, BoxServiceSocket);
 
-                                byte[] sendContent = auxBox.content;
+                                // ahora sacamos esta info directamente del archivo y no de memoria
+                                byte[] sendContent = LoadBoxContent(auxBox.id);
                                 int contentLenght = sendContent.Length;
 
                                 SendInt(contentLenght, BoxServiceSocket);
@@ -419,7 +428,13 @@ namespace ParkVaultServer
 
                                 auxBox.accessCode = null;
                                 auxBox.isOccupied = false;
-                                auxBox.content = null;
+
+                                // Actualizamos el archivo con la nueva info
+                                SaveBoxConfig(auxBox);
+
+                                //Borramos el archivo con la info de la caja
+                                string filename = "box_" + auxBox.id + ".bin";
+                                File.Delete(filename);
 
                                 Thread.Sleep(1000);
                             }
@@ -428,7 +443,7 @@ namespace ParkVaultServer
                     }
                 }
             }
-            else if (order == 3) // get item
+            else if (order == 3) // delete item
             {
                 // Recibimos valores de user, password, boxRow, boxColumn y boxCode
                 user = ReceiveString(BoxServiceSocket);
@@ -482,7 +497,15 @@ namespace ParkVaultServer
                                                  
                                 auxBox.accessCode = null;
                                 auxBox.isOccupied = false;
-                                auxBox.content = null;
+
+                                // Actualizamos el archivo con la nueva info
+                                SaveBoxConfig(auxBox);
+
+                                //Borramos el archivo con la info de la caja
+                                string filename = "box_" + auxBox.id + ".bin";
+                                File.Delete(filename);
+
+                                WriteLog($"Se ha eliminado el contenido de la caja {auxBox.id}");
 
                                 Thread.Sleep(1000);
                                 SendInt(0, BoxServiceSocket);
@@ -544,26 +567,163 @@ namespace ParkVaultServer
             return userLogged;
         }
 
+        // función que guarda un log en el archivo log.txt a partir de un texto
+        static void WriteLog(string text)
+        {
+            FileStream stream = new FileStream("log.txt", FileMode.Append, FileAccess.Write);
+
+            byte[] data = Encoding.UTF8.GetBytes(
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " - " + text + "\n"
+            );
+
+            stream.Write(data);
+            stream.Close();
+        }
+
+        // Función que guarda las propiedades de la caja en un archivo .config, además del log
+        static void SaveBoxConfig(Box box)
+        {
+            string fileName = "box_" + box.id + ".config";
+
+            FileStream stream = new FileStream(fileName, FileMode.Create, FileAccess.Write);
+
+            byte[] bytesStr;
+
+            // id
+            bytesStr = Encoding.UTF8.GetBytes(box.id);
+            stream.Write(BitConverter.GetBytes(bytesStr.Length));
+            stream.Write(bytesStr);
+
+            // isOccupied
+            stream.Write(BitConverter.GetBytes(box.isOccupied));
+
+            // accessCode (si no tiene, guarda espacio vacío)
+            if (box.accessCode == null)
+                bytesStr = Encoding.UTF8.GetBytes("");
+            else
+                bytesStr = Encoding.UTF8.GetBytes(box.accessCode);
+
+            stream.Write(BitConverter.GetBytes(bytesStr.Length));
+            stream.Write(bytesStr);
+
+            stream.Close();
+
+        }
+        // Función que carga las propiedades de cada caja en un archivo .config y guarda un log
+        static Box LoadBoxConfig(string boxId)
+        {
+            string fileName = "box_" + boxId + ".config";
+
+            FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read);
+
+            byte[] bytesInt = new byte[sizeof(int)];
+            byte[] bytesBool = new byte[sizeof(bool)];
+            byte[] bytesStr;
+
+            Box box = new Box();
+
+            // id
+            stream.Read(bytesInt);
+            int size = BitConverter.ToInt32(bytesInt);
+            bytesStr = new byte[size];
+            stream.Read(bytesStr);
+            box.id = Encoding.UTF8.GetString(bytesStr);
+
+            // isOccupied
+            stream.Read(bytesBool);
+            box.isOccupied = BitConverter.ToBoolean(bytesBool);
+
+            // accessCode
+            stream.Read(bytesInt);
+            size = BitConverter.ToInt32(bytesInt);
+            bytesStr = new byte[size];
+            stream.Read(bytesStr);
+            box.accessCode = Encoding.UTF8.GetString(bytesStr);
+
+            stream.Close();
+
+            return box;
+        }
+
+        // Función que guarda el contenido de la caja en un archivo .bin
+        static void SaveBoxContent(string boxId, byte[] content)
+        {
+            string fileName = "box_" + boxId + ".bin";
+
+            FileStream stream = new FileStream(fileName, FileMode.Create, FileAccess.Write);
+
+            stream.Write(content);
+            stream.Close();
+
+            WriteLog("Contenido guardado en la caja " + boxId +
+                     " (" + content.Length + " bytes)");
+        }
+
+        // Función que carga el contenido de una caja de un archivo .bin
+        static byte[] LoadBoxContent(string boxId)
+        {
+            string fileName = "box_" + boxId + ".bin";
+
+            FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read);
+
+            long size = stream.Length;  
+            byte[] content = new byte[size];
+
+            stream.Read(content);
+            stream.Close();
+
+            WriteLog("Contenido leído de la caja " + boxId +
+                     " (" + size + " bytes)");
+
+            return content;
+        }
         static void Main(string[] args)
         {
-
-            Thread userThread = new Thread(UserServiceServer);
-            userThread.Start(); 
+            // al iniciar el servidor, se comprueban si existen los archivos de las cajas + log.txt.
+            // si no existen, se crean y se inicializan las cajas a 0 (vacías)
+            // si existen, se carga la lista con la info de estas cajas
             
-            // por el momento creamos e inicializamos las 16 cajas de 0, más tarde se crearán y cargarán con la info de los archivos
+            if(!File.Exists("log.txt"))
+            {
+                FileStream stream = new FileStream("log.txt", FileMode.Create, FileAccess.Write);
+                stream.Close();
+            }
+
+            // teóricamente está vacía pero por buenas prácticas la vaciamos
+            boxes.Clear();
 
             for(int i = 0; i < 4; i++)
             {
                 for (int j = 0; j < 4; j++)
                 {
+                    string boxId = $"{i}{(BoxLetters)j}";
+                    string configName = "box_" + boxId + ".config";
+
                     Box box = new Box();
-                    box.id = $"{i}{(BoxLetters)j}";
-                    box.accessCode = null;
-                    box.isOccupied = false;
-                    box.content = null;
+
+                    if(File.Exists(configName))
+                    {
+                        box = LoadBoxConfig(boxId);
+
+                        // solo cargamos el config, que ya nos dice si está ocupada o no, porque en caso de que lo esté,
+                        // en el momento de sacar el contenido ya lo haremos con su función LoadBoxContent()
+                    }
+                    else
+                    {
+                        box.id = boxId;
+                        box.accessCode = null;
+                        box.isOccupied = false;
+                        //box.content = null;
+
+                        SaveBoxConfig(box);
+                    }
+
                     boxes.Add(box);
                 }
             }
+
+            Thread userThread = new Thread(UserServiceServer);
+            userThread.Start();
 
             Thread boxThread = new Thread(BoxServiceServer);
             boxThread.Start();

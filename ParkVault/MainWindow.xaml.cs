@@ -305,6 +305,14 @@ namespace ParkVault
             // Intentar obtener el fichero de la caja //
             ////////////////////////////////////////////
 
+            // controlamos que siempre se envíe un código para que el servidor no esté esperando infinitamente en caso de error
+            if (AccessCodeText.Text == "")
+            {
+                MessageBox.Show("Debes introducir un código en acces code");
+                return;
+            }
+
+
             Socket socket = CreateSocketAndConnectServer(boxPort);
 
             // Primero enviamos el num que determina la orden que va a recibir el servidor
@@ -316,7 +324,7 @@ namespace ParkVault
             SendString(UserNameText.Text, socket);
             SendString(PasswordText.Text, socket);
             SendInt(selectedBoxRow, socket);
-            SendInt(selectedBoxColumn, socket);
+            SendInt(selectedBoxColumn, socket);            
             SendString(AccessCodeText.Text, socket);
 
             // Recibimos respuesta del server y la mostramos
@@ -352,7 +360,7 @@ namespace ParkVault
             }
             else if (response == -3)
             {
-                MessageBox.Show("Caja no ocupada");
+                MessageBox.Show("Caja no ocupada"); 
             }
             else if (response == -4)
             {
@@ -366,6 +374,13 @@ namespace ParkVault
             ////////////////////////////////////////////
             // Intentar poner un fichero en la caja   //
             ////////////////////////////////////////////
+
+            // controlamos que siempre se envíe un código para que el servidor no esté esperando infinitamente en caso de error
+            if (AccessCodeText.Text == "")
+            {
+                MessageBox.Show("Debes introducir un código en acces code");
+                return;
+            }
 
             Socket socket = CreateSocketAndConnectServer(boxPort);
 
@@ -443,6 +458,13 @@ namespace ParkVault
             ///////////////////////////////////////////////
             // Intentar eliminar el contenido de la caja //
             ///////////////////////////////////////////////
+            
+            // controlamos que siempre se envíe un código para que el servidor no esté esperando infinitamente en caso de error
+            if (AccessCodeText.Text == "")
+            {
+                MessageBox.Show("Debes introducir un código en acces code");
+                return;
+            }
 
             Socket socket = CreateSocketAndConnectServer(boxPort);
 
