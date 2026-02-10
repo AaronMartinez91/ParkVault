@@ -40,6 +40,13 @@ namespace ParkVaultServer
         static Dictionary<string, string> registeredUsers = new Dictionary<string, string>();
         static List<string> loggedUsers = new List<string>();
         static List<Box> boxes = new List<Box>();
+
+        // creamos objetos para poder hacer distintos locks
+        static Dictionary<string, object> boxLocks = new Dictionary<string, object>();
+        static object usersLock = new object();
+        static object logLock = new object();
+        
+
         enum BoxLetters
         {
             A, B, C, D
@@ -101,130 +108,135 @@ namespace ParkVaultServer
 
         static void UserService(object o)
         {
-            int order;
-            string user;
-            string password;
-
-            Socket loginServiceSocket = (Socket)o;  
-
-            // primero saber qué orden envía!!
-            order = ReceiveInt(loginServiceSocket);
-            // Recibimos valores de user y password
-            user = ReceiveString(loginServiceSocket);
-            password = ReceiveString(loginServiceSocket);
-
-            // comprobar si el usuario existe o no
-            bool userExists = UserExists(user);
-
-            // comprobar si el usuario está logeado o no
-            bool isLogged = UserIsLogged(user);
-
-            //Thread.Sleep(1000);
-
-            if (order == 0) //register
+            // todo lo que hace esta función, también tiene recursos compartidos, por lo que hay que lockearlo
+            lock(usersLock)
             {
+                int order;
+                string user;
+                string password;
 
-                if (userExists)
-                {
-                    SendInt(-2, loginServiceSocket);
-                }
-                else
-                {
-                    // comprobamos que la contraseña tenga al menos 8 caracteres
-                    if (password.Length < 8)
-                    {
-                        SendInt(-1, loginServiceSocket);
-                    }
-                    else
-                    {
-                        registeredUsers.Add(user, password);
-                        SendInt(0, loginServiceSocket);
-                    }
-                }
+                Socket loginServiceSocket = (Socket)o;
 
-            }
-            else if (order == 1) //unregister
-            {
+                // primero saber qué orden envía!!
+                order = ReceiveInt(loginServiceSocket);
+                // Recibimos valores de user y password
+                user = ReceiveString(loginServiceSocket);
+                password = ReceiveString(loginServiceSocket);
 
-                if (!userExists)
-                {
-                    SendInt(-2, loginServiceSocket);
-                }
-                else // exists
-                {
-                    // comprobamos password
-                    if (registeredUsers[user] == password)
-                    {
-                        registeredUsers.Remove(user);
-                        SendInt(0, loginServiceSocket);
-                    }
-                    else
-                    {
-                        SendInt(-1, loginServiceSocket);
-                    }
-                }
-            }
-            else if (order == 2) //login
-            {
+                // comprobar si el usuario existe o no
+                bool userExists = UserExists(user);
 
-                if (userExists)
-                {
-                    // comprobamos si ya está logeado
-                    if (isLogged)
-                    {
-                        SendInt(-3, loginServiceSocket);
-                    }
-                    else // existe y no está logeado
-                    {
-                        // comprobamos si pw es correcta
-                        if (registeredUsers[user] == password)
-                        {
-                            loggedUsers.Add(user);
-                            SendInt(0, loginServiceSocket);
-                        }
-                        else // pw incorrecta
-                        {
-                            SendInt(-1, loginServiceSocket);
-                        }
-                    }
+                // comprobar si el usuario está logeado o no
+                bool isLogged = UserIsLogged(user);
 
-                }
-                else // no existe el usuario
+                //Thread.Sleep(1000);
+
+                if (order == 0) //register
                 {
-                    SendInt(-2, loginServiceSocket);
-                }
-            }
-            else // order 3 (logout)
-            {
-                if (userExists)
-                {
-                    // comprobamos si no está logeado
-                    if (!isLogged)
+
+                    if (userExists)
                     {
                         SendInt(-2, loginServiceSocket);
                     }
-                    else // existe y está logeado
+                    else
                     {
-                        // comprobamos si pw es correcta
-                        if (registeredUsers[user] == password)
-                        {
-                            loggedUsers.Remove(user);
-                            SendInt(0, loginServiceSocket);
-                        }
-                        else // pw incorrecta
+                        // comprobamos que la contraseña tenga al menos 8 caracteres
+                        if (password.Length < 8)
                         {
                             SendInt(-1, loginServiceSocket);
+                        }
+                        else
+                        {
+                            registeredUsers.Add(user, password);
+                            SendInt(0, loginServiceSocket);
                         }
                     }
 
                 }
-                else // no existe el usuario
+                else if (order == 1) //unregister
                 {
-                    SendInt(-3, loginServiceSocket);
-                }
-            }
 
-            loginServiceSocket.Close();
+                    if (!userExists)
+                    {
+                        SendInt(-2, loginServiceSocket);
+                    }
+                    else // exists
+                    {
+                        // comprobamos password
+                        if (registeredUsers[user] == password)
+                        {
+                            registeredUsers.Remove(user);
+                            SendInt(0, loginServiceSocket);
+                        }
+                        else
+                        {
+                            SendInt(-1, loginServiceSocket);
+                        }
+                    }
+                }
+                else if (order == 2) //login
+                {
+
+                    if (userExists)
+                    {
+                        // comprobamos si ya está logeado
+                        if (isLogged)
+                        {
+                            SendInt(-3, loginServiceSocket);
+                        }
+                        else // existe y no está logeado
+                        {
+                            // comprobamos si pw es correcta
+                            if (registeredUsers[user] == password)
+                            {
+                                loggedUsers.Add(user);
+                                SendInt(0, loginServiceSocket);
+                            }
+                            else // pw incorrecta
+                            {
+                                SendInt(-1, loginServiceSocket);
+                            }
+                        }
+
+                    }
+                    else // no existe el usuario
+                    {
+                        SendInt(-2, loginServiceSocket);
+                    }
+                }
+                else // order 3 (logout)
+                {
+                    if (userExists)
+                    {
+                        // comprobamos si no está logeado
+                        if (!isLogged)
+                        {
+                            SendInt(-2, loginServiceSocket);
+                        }
+                        else // existe y está logeado
+                        {
+                            // comprobamos si pw es correcta
+                            if (registeredUsers[user] == password)
+                            {
+                                loggedUsers.Remove(user);
+                                SendInt(0, loginServiceSocket);
+                            }
+                            else // pw incorrecta
+                            {
+                                SendInt(-1, loginServiceSocket);
+                            }
+                        }
+
+                    }
+                    else // no existe el usuario
+                    {
+                        SendInt(-3, loginServiceSocket);
+                    }
+                }
+
+                loginServiceSocket.Close();
+            }
+        
         }
 
         static void BoxService(object o)
@@ -253,46 +265,57 @@ namespace ParkVaultServer
                 password = ReceiveString(BoxServiceSocket);
                 boxRow = ReceiveInt(BoxServiceSocket);
                 boxColumn = ReceiveInt(BoxServiceSocket);
+                bool isLogged;
+                bool isPasswordOk;
 
-                // primero comprobamos el login
-                bool isLogged = UserIsLogged(user);
-
+                // bloqueamos el control de login y password para luego trabajar con él
+                lock (usersLock)
+                {
+                    isLogged = UserIsLogged(user);
+                    isPasswordOk = IsPasswordOk(user, password);
+                }
+                
                 // guardamos el ID de la caja
                 string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
 
-                if (!isLogged)
+                // cuando ya sabemos con qué caja trabajar, la bloqueamos antes de hacerlo
+                lock (boxLocks[boxId])
                 {
-                    SendInt(-2, BoxServiceSocket);
-                }
-                else
-                {
-                    // comprobamos si la contraseña es correcta
-                    if (registeredUsers[user] != password)
+                    if (!isLogged)
                     {
-                        SendInt(-1, BoxServiceSocket);
+                        SendInt(-2, BoxServiceSocket);
                     }
                     else
                     {
-                        // ahora debemos mirar si la caja está ocupada o no
-                        foreach (Box b in boxes)
+                        // comprobamos si la contraseña es correcta
+                        if (!isPasswordOk)
                         {
-                            if (b.id == boxId)
+                            SendInt(-1, BoxServiceSocket);
+                        }
+                        else
+                        {
+                            // ahora debemos mirar si la caja está ocupada o no
+                            foreach (Box b in boxes)
                             {
-                                if (b.isOccupied)
+                                if (b.id == boxId)
                                 {
-                                    SendInt(1, BoxServiceSocket);
-                                }
-                                else
-                                {
-                                    SendInt(0, BoxServiceSocket);
+                                    if (b.isOccupied)
+                                    {
+                                        SendInt(1, BoxServiceSocket);
+                                    }
+                                    else
+                                    {
+                                        SendInt(0, BoxServiceSocket);
 
-                                    // Hemos decidido guardar solo el caso en el que se muestra info de las cajas al usuario
-                                    WriteLog($"El usuario {user} ha comprobado la caja {boxId}");
+                                        // Hemos decidido guardar solo el caso en el que se muestra info de las cajas al usuario
+                                        WriteLog($"El usuario {user} ha comprobado la caja {boxId}");
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                
             }
             else if (order == 1) // put item
             {
@@ -314,56 +337,68 @@ namespace ParkVaultServer
                     BoxServiceSocket.Receive(boxData); 
 
                     Console.WriteLine($"Archivo recibido: {boxData}");
-                }                
+                }
 
-                // primero comprobamos el login
-                bool isLogged = UserIsLogged(user);
+                bool isLogged;
+                bool isPasswordOk;
+
+                // bloqueamos el control de login y password para luego trabajar con él
+                lock (usersLock)
+                {
+                    isLogged = UserIsLogged(user);
+                    isPasswordOk = IsPasswordOk(user, password);
+                }
 
                 // guardamos el ID de la caja
                 string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
 
-                if (!isLogged)
+                lock (boxLocks[boxId])
                 {
-                    SendInt(-2, BoxServiceSocket);
-                }
-                else
-                {
-                    // comprobamos si la contraseña es correcta
-                    if (registeredUsers[user] != password)
+                    if (!isLogged)
                     {
-                        SendInt(-1, BoxServiceSocket);
+                        SendInt(-2, BoxServiceSocket);
                     }
                     else
                     {
-                        
-                        // ahora debemos mirar si la caja está ocupada o no
-                        foreach (Box b in boxes)
+                        // comprobamos si la contraseña es correcta
+                        if (!isPasswordOk)
                         {
-                            // obtenemos la caja con la que vamos a trabajar
-                            if (b.id == boxId)
-                            {
-                                auxBox = b;
-                            }
-                        }
-                        if (auxBox.isOccupied)
-                        {
-                            SendInt(-3, BoxServiceSocket);
+                            SendInt(-1, BoxServiceSocket);
                         }
                         else
                         {
 
-                            auxBox.accessCode = boxCode;
-                            auxBox.isOccupied = true;
-                            //auxBox.content = boxData;  ya no nos hace falta, esto ahora lo gestiona el archivo
+                            // ahora debemos mirar si la caja está ocupada o no
+                            foreach (Box b in boxes)
+                            {
+                                // obtenemos la caja con la que vamos a trabajar
+                                if (b.id == boxId)
+                                {
+                                    auxBox = b;
+                                }
+                            }
+                            if (auxBox.isOccupied)
+                            {
+                                SendInt(-3, BoxServiceSocket);
+                            }
+                            else
+                            {
 
-                            SaveBoxConfig(auxBox);
-                            SaveBoxContent(auxBox.id, boxData);
+                                auxBox.accessCode = boxCode;
+                                auxBox.isOccupied = true;
+                                //auxBox.content = boxData;  ya no nos hace falta, esto ahora lo gestiona el archivo
 
-                            Thread.Sleep(1000);
-                            SendInt(0, BoxServiceSocket);
-                        }                    
+                                SaveBoxConfig(auxBox);
+                                SaveBoxContent(auxBox.id, boxData);
+
+                                Thread.Sleep(1000);
+                                SendInt(0, BoxServiceSocket);
+                            }
+                        }
                     }
                 }
+
+                
 
             }
             else if (order == 2) // get item
@@ -375,73 +410,85 @@ namespace ParkVaultServer
                 boxColumn = ReceiveInt(BoxServiceSocket);
                 boxCode = ReceiveString(BoxServiceSocket);
 
-                // primero comprobamos el login
-                bool isLogged = UserIsLogged(user);
+                bool isLogged;
+                bool isPasswordOk;
+
+                // bloqueamos el control de login y password para luego trabajar con él
+                lock (usersLock)
+                {
+                    isLogged = UserIsLogged(user);
+                    isPasswordOk = IsPasswordOk(user, password);
+                }
 
                 // guardamos el ID de la caja
                 string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
 
-                if (!isLogged)
+                lock (boxLocks[boxId])
                 {
-                    SendInt(-2, BoxServiceSocket);
-                }
-                else
-                {
-                    // comprobamos si la contraseña es correcta
-                    if (registeredUsers[user] != password)
+                    if (!isLogged)
                     {
-                        SendInt(-1, BoxServiceSocket);
+                        SendInt(-2, BoxServiceSocket);
                     }
                     else
                     {
-                        // ahora debemos mirar si la caja está ocupada o no
-                        foreach (Box b in boxes)
+                        // comprobamos si la contraseña es correcta
+                        if (!isPasswordOk)
                         {
-                            // obtenemos la caja con la que vamos a trabajar
-                            if (b.id == boxId)
-                            {
-                                auxBox = b;
-                            }
-                        }
-                        if (!auxBox.isOccupied)
-                        {
-                            SendInt(-3, BoxServiceSocket);
+                            SendInt(-1, BoxServiceSocket);
                         }
                         else
                         {
-                            // comprobamos si el código es correcto
-                            if (auxBox.accessCode != boxCode)
+                            // ahora debemos mirar si la caja está ocupada o no
+                            foreach (Box b in boxes)
                             {
-                                SendInt(-4, BoxServiceSocket);
+                                // obtenemos la caja con la que vamos a trabajar
+                                if (b.id == boxId)
+                                {
+                                    auxBox = b;
+                                }
+                            }
+                            if (!auxBox.isOccupied)
+                            {
+                                SendInt(-3, BoxServiceSocket);
                             }
                             else
                             {
-                                // enviamos datos y borramos
-                                SendInt(0, BoxServiceSocket);
+                                // comprobamos si el código es correcto
+                                if (auxBox.accessCode != boxCode)
+                                {
+                                    SendInt(-4, BoxServiceSocket);
+                                }
+                                else
+                                {
+                                    // enviamos datos y borramos
+                                    SendInt(0, BoxServiceSocket);
 
-                                // ahora sacamos esta info directamente del archivo y no de memoria
-                                byte[] sendContent = LoadBoxContent(auxBox.id);
-                                int contentLenght = sendContent.Length;
+                                    // ahora sacamos esta info directamente del archivo y no de memoria
+                                    byte[] sendContent = LoadBoxContent(auxBox.id);
+                                    int contentLenght = sendContent.Length;
 
-                                SendInt(contentLenght, BoxServiceSocket);
-                                BoxServiceSocket.Send(sendContent);
+                                    SendInt(contentLenght, BoxServiceSocket);
+                                    BoxServiceSocket.Send(sendContent);
 
-                                auxBox.accessCode = null;
-                                auxBox.isOccupied = false;
+                                    auxBox.accessCode = null;
+                                    auxBox.isOccupied = false;
 
-                                // Actualizamos el archivo con la nueva info
-                                SaveBoxConfig(auxBox);
+                                    // Actualizamos el archivo con la nueva info
+                                    SaveBoxConfig(auxBox);
 
-                                //Borramos el archivo con la info de la caja
-                                string filename = "box_" + auxBox.id + ".bin";
-                                File.Delete(filename);
+                                    //Borramos el archivo con la info de la caja
+                                    string filename = "box_" + auxBox.id + ".bin";
+                                    File.Delete(filename);
 
-                                Thread.Sleep(1000);
+                                    Thread.Sleep(1000);
+                                }
+
                             }
-
                         }
                     }
                 }
+
+                
             }
             else if (order == 3) // delete item
             {
@@ -452,68 +499,79 @@ namespace ParkVaultServer
                 boxColumn = ReceiveInt(BoxServiceSocket);
                 boxCode = ReceiveString(BoxServiceSocket);
 
-                // primero comprobamos el login
-                bool isLogged = UserIsLogged(user);
+                bool isLogged;
+                bool isPasswordOk;
+
+                // bloqueamos el control de login y password para luego trabajar con él
+                lock (usersLock)
+                {
+                    isLogged = UserIsLogged(user);
+                    isPasswordOk = IsPasswordOk(user, password);
+                }
 
                 // guardamos el ID de la caja
                 string boxId = $"{boxRow}{(BoxLetters)boxColumn}";
 
-                if (!isLogged)
+                lock (boxLocks[boxId])
                 {
-                    SendInt(-2, BoxServiceSocket);
-                }
-                else
-                {
-                    // comprobamos si la contraseña es correcta
-                    if (registeredUsers[user] != password)
+                    if (!isLogged)
                     {
-                        SendInt(-1, BoxServiceSocket);
+                        SendInt(-2, BoxServiceSocket);
                     }
                     else
                     {
-                        // ahora debemos mirar si la caja está ocupada o no
-                        foreach (Box b in boxes)
+                        // comprobamos si la contraseña es correcta
+                        if (!isPasswordOk)
                         {
-                            // obtenemos la caja con la que vamos a trabajar
-                            if (b.id == boxId)
-                            {
-                                auxBox = b;
-                            }
-                        }
-                        if (!auxBox.isOccupied)
-                        {
-                            SendInt(-3, BoxServiceSocket);
+                            SendInt(-1, BoxServiceSocket);
                         }
                         else
                         {
-                            // comprobamos si el código es correcto
-                            if (auxBox.accessCode != boxCode)
+                            // ahora debemos mirar si la caja está ocupada o no
+                            foreach (Box b in boxes)
                             {
-                                SendInt(-4, BoxServiceSocket);
+                                // obtenemos la caja con la que vamos a trabajar
+                                if (b.id == boxId)
+                                {
+                                    auxBox = b;
+                                }
+                            }
+                            if (!auxBox.isOccupied)
+                            {
+                                SendInt(-3, BoxServiceSocket);
                             }
                             else
                             {
-                                // borramos datos
-                                                 
-                                auxBox.accessCode = null;
-                                auxBox.isOccupied = false;
+                                // comprobamos si el código es correcto
+                                if (auxBox.accessCode != boxCode)
+                                {
+                                    SendInt(-4, BoxServiceSocket);
+                                }
+                                else
+                                {
+                                    // borramos datos
 
-                                // Actualizamos el archivo con la nueva info
-                                SaveBoxConfig(auxBox);
+                                    auxBox.accessCode = null;
+                                    auxBox.isOccupied = false;
 
-                                //Borramos el archivo con la info de la caja
-                                string filename = "box_" + auxBox.id + ".bin";
-                                File.Delete(filename);
+                                    // Actualizamos el archivo con la nueva info
+                                    SaveBoxConfig(auxBox);
 
-                                WriteLog($"Se ha eliminado el contenido de la caja {auxBox.id}");
+                                    //Borramos el archivo con la info de la caja
+                                    string filename = "box_" + auxBox.id + ".bin";
+                                    File.Delete(filename);
 
-                                Thread.Sleep(1000);
-                                SendInt(0, BoxServiceSocket);
+                                    WriteLog($"Se ha eliminado el contenido de la caja {auxBox.id}");
+
+                                    Thread.Sleep(1000);
+                                    SendInt(0, BoxServiceSocket);
+                                }
+
                             }
-
                         }
                     }
                 }
+                
             }
 
                 BoxServiceSocket.Close();
@@ -567,17 +625,32 @@ namespace ParkVaultServer
             return userLogged;
         }
 
+        static bool IsPasswordOk(string user, string password)
+        {
+            bool isPasswordOk = false;
+            if(registeredUsers[user] == password)
+            {
+                isPasswordOk = true;
+            }
+            return isPasswordOk;
+        }
+
         // función que guarda un log en el archivo log.txt a partir de un texto
         static void WriteLog(string text)
         {
-            FileStream stream = new FileStream("log.txt", FileMode.Append, FileAccess.Write);
+            // aquí ponemos un bloqueo para que se escriba de 1 en 1 en el fichero
+            lock (logLock)
+            {
+                FileStream stream = new FileStream("log.txt", FileMode.Append, FileAccess.Write);
 
-            byte[] data = Encoding.UTF8.GetBytes(
-                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " - " + text + "\n"
-            );
+                byte[] data = Encoding.UTF8.GetBytes(
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " - " + text + "\n"
+                );
 
-            stream.Write(data);
-            stream.Close();
+                stream.Write(data);
+                stream.Close();
+            }
+            
         }
 
         // Función que guarda las propiedades de la caja en un archivo .config, además del log
@@ -717,6 +790,13 @@ namespace ParkVaultServer
 
                         SaveBoxConfig(box);
                     }
+
+                    // al inicializar, el diccionario de cajas locked está vacío, por lo que lo vamos llenando
+                    if (!boxLocks.ContainsKey(boxId))
+                    {
+                        boxLocks.Add(boxId, new object());
+                    }
+
 
                     boxes.Add(box);
                 }
