@@ -55,7 +55,7 @@ namespace ParkVaultServer
         static void UserServiceServer()
         {
             // Login de clientes
-            IPAddress address = IPAddress.Parse("127.0.0.1");
+            IPAddress address = IPAddress.Parse("192.168.111.32");
             IPEndPoint loginEndPoint = new IPEndPoint(address, 1000);
             Socket loginServerSocket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             Socket loginServiceSocket;
@@ -86,7 +86,7 @@ namespace ParkVaultServer
 
         static void BoxServiceServer()
         {
-            IPAddress address = IPAddress.Parse("127.0.0.1");
+            IPAddress address = IPAddress.Parse("192.168.111.32");
             IPEndPoint loginEndPoint = new IPEndPoint(address, 1001);
             Socket loginServerSocket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             Socket loginServiceSocket;
@@ -129,7 +129,7 @@ namespace ParkVaultServer
                 // comprobar si el usuario está logeado o no
                 bool isLogged = UserIsLogged(user);
 
-                //Thread.Sleep(1000);
+                Thread.Sleep(5000);
 
                 if (order == 0) //register
                 {
@@ -281,6 +281,7 @@ namespace ParkVaultServer
                 // cuando ya sabemos con qué caja trabajar, la bloqueamos antes de hacerlo
                 lock (boxLocks[boxId])
                 {
+                    Thread.Sleep(5000);
                     if (!isLogged)
                     {
                         SendInt(-2, BoxServiceSocket);
